@@ -1,13 +1,13 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import './App.css'
 import appFirebase from './firebase-config.js'
-import { getFirestore, collection, addDoc } from 'firebase/firestore'
+import { getFirestore, collection, query, addDoc, getDocs } from 'firebase/firestore'
 
 
 const db = getFirestore(appFirebase)
 
 function App() {
-  const [count, setCount] = useState(0)
+  const [userLogin, setUserLogin] = useState(null)
 
   const [data, setData] = useState({
     name: '',
@@ -19,8 +19,11 @@ function App() {
     name: null,
     number: null,
     email: null,
-    validForm : null
+    validForm : null,
+    notAllowed: null
   })
+
+  const [list, setList] = useState([])
 
   const handleChange = ({target:{ name , value}}) => {
     setData({ ...data, [name]: value})
@@ -31,8 +34,11 @@ function App() {
 
     setError({
       ...error,
-      [name]: null
+      [name]: null,
+      notAllowed: null
     })
+
+    setUserLogin(null)
   }
 
   const onSubmit = async (e) => {
@@ -56,26 +62,57 @@ function App() {
 
     if(error.validForm){
       try {
-        const result = await addDoc(collection(db,'usuarios'),{
-          ...data
+        const q = query(collection(db, "usuarios"));
+        const querySnapshot = await getDocs(q);
+        const arrayList = [];
+        querySnapshot.forEach(doc =>{
+          arrayList.push({...doc.data(), id: doc.id})
         })
-        console.log(result)
+        const notAllowed = arrayList.filter(item=> item.email == data.email)
+        if(!notAllowed.length){
+          const result = await addDoc(collection(db,'usuarios'),{
+            ...data
+          })
+          console.log(result)
+          setData({
+            name: '',
+            number: '',
+            email: ''
+          })
+          setError({...error, notAllowed: null})
+          setUserLogin(true)
+        }else setError({...error, notAllowed: true})
       } catch (error) {
         console.log(error)
       }
-      setData({
-        name: '',
-        number: '',
-        email: ''
-      })
+
       
     }
   }
 
+  //Funcion para renderizar las tablas <3
+
+  useEffect(() =>{
+    const res = async() =>{
+      try {
+        const q = query(collection(db, "usuarios"));
+        const querySnapshot = await getDocs(q);
+        const arrayList = [];
+        querySnapshot.forEach(doc =>{
+          arrayList.push({...doc.data(), id: doc.id})
+        })
+        setList(arrayList);
+      } catch (error) {
+        console.log(error)
+      }
+    }
+    res();
+  },[data])
+
   return (
     <>
 
-      <h1>...</h1>
+      <h1>Formulario de Contacto</h1>
       <form onSubmit={onSubmit}>
 
         <div className='containerForm'>
@@ -109,15 +146,22 @@ function App() {
           {error.validForm === false &&
           <h3>Rellenar los campos</h3>}
           
-          <button type="submit">Holis</button>
-          
+          <button type="submit">Login</button>
+
+          {userLogin === true &&
+          <h3>Usuario registrado correctamente</h3>}  
+
+          {error.notAllowed === true &&
+          <h4>Usuario ya registrado</h4>}
         </div>
       </form>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-      </div>
+
+      {list.map((item, index) => 
+        <div key={index}>
+          {item.email}
+        </div>
+        
+        )}
     </>
   )
 }
